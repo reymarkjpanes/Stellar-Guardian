@@ -274,7 +274,7 @@ sequenceDiagram
     RL-->>EA: Ok
     EA-->>C: Ok
 ```
-*Figure 4 — Cross-contract call sequence for dispute initiation and resolution.*
+*Figure 21 — Cross-contract call sequence for dispute initiation and resolution.*
 
 ### 5.5 Fee Collection Architecture
 
@@ -363,7 +363,7 @@ flowchart TD
     ui --> types
     ui --> shared
 ```
-*Figure 5 — Internal package dependency graph. No circular dependencies permitted.*
+*Figure 22 — Internal package dependency graph. No circular dependencies permitted.*
 
 ---
 
@@ -567,13 +567,13 @@ sequenceDiagram
     A-->>W: JWT (short-lived, scoped to account)
     W->>W: Store JWT in memory (not localStorage)
 ```
-*Figure 7 — SEP-10 authentication flow. No passwords. No private key exposure.*
+*Figure 20 — SEP-10 authentication flow. No passwords. No private key exposure.*
 
 **JWT scope:** JWTs are scoped to a single Stellar account address. Cross-account actions (such as an arbiter acting on a dispute) require a separate challenge/response cycle for the arbiter's account.
 
 ### 10.2 Smart Contract Authorization
 
-Every state-altering contract function calls `Address.require_auth()` on the relevant signer before performing any state mutation. This is a non-negotiable security baseline — see [Section 10](#10-security-architecture).
+Every state-altering contract function calls `Address.require_auth()` on the relevant signer before performing any state mutation. This is a non-negotiable security baseline — see [Section 24](#24-security-architecture).
 
 The authorization matrix for `EscrowAgreement`:
 
