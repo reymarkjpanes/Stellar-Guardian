@@ -259,7 +259,7 @@ gantt
 | **Business Value** | This is the product. Without a working, audited escrow contract, nothing else in the system has value. |
 | **Technical Scope** | `contracts/escrow/` — `initialize_escrow`, `fund_escrow`, `approve_milestone`, `open_dispute`, `claim_after_expiry`, `extend_ttl`, fee collection, donation flag |
 | **Priority** | P0 — Must ship |
-| **Dependencies** | Soroban SDK `=25.3.0`, `fixed-point-math =1.3.1`, Stellar Testnet account |
+| **Dependencies** | Soroban SDK `=25.3.0`, `soroban-fixed-point-math =1.3.1`, Stellar Testnet account |
 
 ### EPIC-02: Dispute Resolution Contract
 
@@ -402,7 +402,7 @@ gantt
 #### F-01.4: Fee Collection & Donation Exemption
 - **Description:** Platform fee (50 basis points = 0.5%, capped at 50 USDC) collected at `Completed` transition. Donation escrows set `donation_flag = true` at initialization and are fee-exempt.
 - **Functional Scope:** Fee deduction logic in `Completed` transition; `donation_flag` check; treasury address from Instance Storage
-- **Technical Considerations:** Integer basis points arithmetic only (no floating point); `fixed-point-math =1.3.1` library; fee logic is on-chain and auditable
+- **Technical Considerations:** Integer basis points arithmetic only (no floating point); `soroban-fixed-point-math =1.3.1` library; fee logic is on-chain and auditable
 - **Priority:** P0
 - **Complexity:** 5 story points
 
@@ -1225,7 +1225,7 @@ flowchart LR
 
 | Feature | Depends On | Blocks |
 |---|---|---|
-| F-01.1 (Escrow core) | Soroban SDK `=25.3.0`, `fixed-point-math =1.3.1` | Everything |
+| F-01.1 (Escrow core) | Soroban SDK `=25.3.0`, `soroban-fixed-point-math =1.3.1` | Everything |
 | F-01.2 (Multi-milestone) | F-01.1 | F-01.3, F-05.2 |
 | F-01.3 (Dispute initiation) | F-01.2, F-02.1 | F-05.4 |
 | F-02.1 (Dispute registration) | F-01.3 (cross-contract call) | F-02.2, F-02.3 |
@@ -1242,8 +1242,8 @@ flowchart LR
 
 | Dependency | Type | Version Required | Risk |
 |---|---|---|---|
-| `soroban-sdk` | Contract runtime | `=25.3.0` | CVE-2026-32322 fix; breaking changes on major version |
-| `fixed-point-math` | Contract library | `=1.3.1` | CVE-2026-24783 fix |
+| `soroban-sdk` | Contract runtime | `=25.3.0` | CVE-2026-32322 fix (Fr scalar-field equality bug); breaking changes on major version |
+| `soroban-fixed-point-math` | Contract library | `=1.3.1` | Actively maintained Soroban-native fork; no verified CVE — pinned for stability |
 | `@creit.tech/stellar-wallets-kit` | Frontend wallet | Pinned | Kit abandonment risk; open-source fork fallback |
 | `@stellar/stellar-sdk` | Frontend + API | Latest stable | Soroban RPC API compatibility |
 | `pgx/v5` | Go database | v5.x | Pool config; parameterized queries enforced |
@@ -1373,9 +1373,9 @@ flowchart LR
 **Deliverables:**
 - 2-of-3 multisig escrow initialization and approval
 - Custom `check-auth` flows in `EscrowAgreement` for complex authorization patterns
-- Fee-bump transaction sponsorship (platform sponsors network fees for users)
+- Fee-bump transaction sponsorship (platform sponsors network fees for users) — requires minimal signing service per ADR-004 (revised)
 - 3-of-5 admin multisig emergency pause (`pause_contract` / `unpause_contract`)
-- SEP-10 basic wallet authentication in frontend (pre-API version)
+- SEP-10 wallet authentication backed by the minimal signing service (introduced at Orange Belt per ADR-004 revised; full Go API SEP-10 integration at Green Belt)
 
 **Exit Criteria:**
 - Multisig escrow created and released via 2 separate wallet signatures on Testnet

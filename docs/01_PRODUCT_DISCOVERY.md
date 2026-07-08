@@ -326,7 +326,7 @@ Application architecture follows **Clean Architecture** principles: domain logic
 
 The engineering baseline is predictability. Deterministic execution paths over complex abstractions. Explicit state transitions over implicit side effects. Pinned dependency versions over open ranges.
 
-> **Note:** Architectural Decision Records (ADRs) — including the phased backend introduction strategy (ADR-004) — are documented in [`03_ARCHITECTURE_REVIEW.md`](./03_ARCHITECTURE_REVIEW.md).
+> **Note:** Architectural Decision Records (ADRs) — including the phased backend introduction strategy (ADR-004) — are documented in [`02_ARCHITECTURE_REVIEW.md`](./02_ARCHITECTURE_REVIEW.md).
 
 
 ---
@@ -468,15 +468,15 @@ These are hard limits on the project that are not negotiable and must be respect
 | **Rust contract language** | Smart contracts are written exclusively in Rust. No Solidity, Move, or other languages. |
 | **Non-custodial by architecture** | The platform must never hold private keys or have unilateral control over user funds at any phase. |
 | **Stellar network only** | No cross-chain bridges, no multi-chain deployment. The infrastructure is Stellar-native. |
-| **Soroban SDK pinned to ≥ 25.3.0** | Required for CVE-2026-32322 fix. No deployment on earlier versions. |
-| **Fixed-point math library pinned to ≥ 1.3.1** | Required for CVE-2026-24783 fix. |
+| **Soroban SDK pinned to `=25.3.0`** | Required for CVE-2026-32322 fix. No deployment on earlier versions. |
+| **`soroban-fixed-point-math` library pinned to `=1.3.1`** | Actively maintained Soroban-native fixed-point math library. Pinned for stability and auditable fee arithmetic. No verified CVE — the crate name `fixed-point-math` (deprecated, last published at v0.0.2) was incorrect in earlier drafts. |
 
 ### 14.2 Business Constraints
 
 | Constraint | Description |
 |---|---|
 | **Phase-gated development** | Features are delivered in the Journey to Mastery belt sequence. No Black Belt features are built before Green Belt infrastructure is stable. |
-| **No backend before Green Belt** | The `apps/api/` backend is not introduced until Green Belt phase per ADR-004. |
+| **Phased backend introduction** | The `apps/api/` Go REST API is not introduced until Green Belt. At Orange Belt, a minimal signing service (fee-bump + SEP-10 only) is introduced per ADR-004 (revised). |
 | **External audit before Mainnet** | At least one external Rust/Soroban security audit is required before any Mainnet deployment. This is a hard gate, not a preference. |
 | **Monorepo with Turborepo** | All application code lives in the Turborepo monorepo. No separate repositories for frontend, contracts, or packages. |
 | **pnpm only** | npm and yarn are not used in this workspace. All package management uses pnpm. |
@@ -584,12 +584,12 @@ flowchart LR
 |---|---|---|---|
 | **White Belt** | Sandbox Deployment | Local Docker environment with working time-locked escrow | Compile and deploy `escrow_core` contract locally; successful lock and release cycle |
 | **Yellow Belt** | Testnet Multi-Milestone | Full multi-milestone escrow on Stellar Testnet | Deploy contract with dynamic milestone definitions; trigger releases via testnet wallets |
-| **Orange Belt** | Custom Auth & Multisig | 2-of-3 multisig escrows with fee-bump sponsorship | Implement `check-auth` flows; validate custom signer authorization logic |
+| **Orange Belt** | Custom Auth & Multisig | 2-of-3 multisig escrows, fee-bump sponsorship, minimal signing service | Implement `check-auth` flows; minimal signing service operational (fee-bump + SEP-10) per ADR-004 (revised) |
 | **Green Belt** | High-Performance Indexing | Real-time PostgreSQL read-cache from on-chain events | Deploy Mercury Retroshades; normalized event database updating in real time |
 | **Blue Belt** | Fiat Ramps & Interoperability | Live card-to-stablecoin escrow funding | Embed SEP-24 deposits and SEP-38 quotes; end-to-end checkout from bank card to funded escrow |
 | **Black Belt** | Mainnet + Decentralized Court | Fully decentralized trust infrastructure on Mainnet | Game-theoretic juror pool with token staking; production deployment handling real B2B and freelance transactions |
 
-> **ADR-004 reminder:** The backend API (`apps/api/`) is not introduced until Green Belt. White and Yellow Belt phases operate with the frontend communicating directly with Soroban contracts via Stellar RPC. This is an intentional architectural decision, not a shortcut.
+> **ADR-004 note:** White and Yellow Belt phases operate with the frontend communicating directly with Soroban contracts via Stellar RPC — no backend. At Orange Belt, a minimal signing service is introduced for fee-bump sponsorship and SEP-10 auth (two endpoints, no business logic, no fund access). The full Go REST API (`apps/api/`) arrives at Green Belt. See `02_ARCHITECTURE_REVIEW.md §23 ADR-004` for the full rationale.
 
 
 ---
@@ -601,9 +601,9 @@ This document is the first in a series of fourteen technical and product documen
 | # | Document | Answers |
 |---|---|---|
 | **01** | `01_PRODUCT_DISCOVERY.md` ← *this document* | Why are we building this? |
-| 02 | `02_REQUIREMENTS_SRS.md` | What must the system do? |
-| 03 | `03_ARCHITECTURE_REVIEW.md` | How is the system structured at the macro level? |
-| 04 | `04_ENGINEERING_BLUEPRINT.md` | How are each layer and service implemented? |
+| 02 | `02_ARCHITECTURE_REVIEW.md` | How is the system structured at the macro level? |
+| 03 | `03_ENGINEERING_BLUEPRINT.md` | How are each layer and service implemented? |
+| 04 | `04_PRODUCT_PLAN.md` | What is the phased delivery plan and sprint roadmap? |
 | 05 | `05_DOMAIN_MODEL.md` | What are the core entities, states, and transitions? |
 | 06 | `06_DATABASE_DESIGN.md` | How is off-chain state persisted and indexed? |
 | 07 | `07_API_SPECIFICATION.md` | What are the REST API contracts? |
@@ -632,8 +632,8 @@ The following sources informed the product discovery, competitive analysis, and 
 
 ### Security
 
-- CVE-2026-32322 — Soroban SDK integer overflow vulnerability (fixed in soroban-sdk ≥ 25.3.0)
-- CVE-2026-24783 — Fixed-point math library precision error (fixed in fixed-point-math ≥ 1.3.1)
+- CVE-2026-32322 — Soroban SDK: missing modular-reduction step in Fr scalar-field equality comparisons for BN254/BLS12-381 types. Contracts comparing user-supplied elliptic-curve scalar values directly can receive incorrect equality results, enabling authorization or validation bypasses in contracts using pairing-based cryptography. Fixed in `soroban-sdk ≥ 25.3.0`. **Directly relevant to any nullifier or commitment scheme using pairing curves — see `02_ARCHITECTURE_REVIEW.md §26 Risk 5`.**
+- `soroban-fixed-point-math` — Soroban-native fixed-point arithmetic library (the actively maintained fork; `fixed-point-math` on crates.io is deprecated at v0.0.2). Pinned to `=1.3.1` for auditable fee arithmetic. No verified CVE.
 - [Scout Audit](https://github.com/CoinFabrik/scout) — Static analysis tool for Soroban smart contracts
 
 ### Competitive Landscape
@@ -682,7 +682,7 @@ The following sources informed the product discovery, competitive analysis, and 
 ---
 
 *Document classification: Internal — Product & Engineering*
-*Next document: [`02_REQUIREMENTS_SRS.md`](./02_REQUIREMENTS_SRS.md)*
+*Next document: [`02_ARCHITECTURE_REVIEW.md`](./02_ARCHITECTURE_REVIEW.md)*
 *Source material: Stellar Guardian Product Discovery PDF v0.9 (internal research)*
 *Revision notes: v1.0 — Initial authored version. Rewrote, reorganized, and expanded from PDF research draft. Added Mermaid diagrams, JTBD table, Blue Ocean matrix, and complete glossary.*
 *Revision notes: v1.1 — Added sections: Product Success Metrics (§12), Assumptions (§13), Constraints (§14), Out of Scope (§15), Stakeholders (§16), Product Requirements Traceability (§17), Future Vision (§18), References (§21). Moved ADR-004 detail to 03_ARCHITECTURE_REVIEW.md cross-reference. Renumbered all sections. Replaced "Source Material" with structured References.*

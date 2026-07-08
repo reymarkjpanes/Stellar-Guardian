@@ -136,7 +136,7 @@ C4Container
 ```
 *Figure 2 — Container diagram showing all major deployable units and their communication paths.*
 
-> **Note:** The Go REST API (`api`) does not exist in White or Yellow Belt phases. The web application communicates directly with Soroban contracts via Stellar RPC. This is documented as ADR-004 and is an intentional architectural decision — see [Section 23](#23-architecture-decision-records).
+> **Note:** The Go REST API (`api`) does not exist in White or Yellow Belt phases. The web application communicates directly with Soroban contracts via Stellar RPC. At Orange Belt, a minimal signing service (fee-bump sponsorship + SEP-10 challenge/verify) is introduced. The full Go API is introduced at Green Belt. This phased approach is documented as ADR-004 — see [Section 23](#23-architecture-decision-records).
 
 ---
 
@@ -990,7 +990,7 @@ This matrix traces each non-functional requirement to the architectural decision
 | **Performance** | Indexer lag p95 ≤ 5 seconds | Mercury + Zephyr VM (ADR-002); Redis caches hot reads | Mercury lag metric exported to Prometheus |
 | **Performance** | Escrow creation ≤ 3 minutes end-to-end | Direct RPC path (White/Yellow Belt); Soroban ~5-second finality | UX KPI: measured from wallet connect to funded escrow |
 | **Security** | Non-custodial guarantee | `Address.require_auth()` on every mutating function; admin multisig cannot drain funds; no backend in write path | External audit; Scout Audit on every CI PR |
-| **Security** | Dependency CVEs patched | Soroban SDK pinned `>=25.3.0`; fixed-point math `>=1.3.1` | Cargo audit in CI; Dependabot alerts |
+| **Security** | Dependency pinning | Soroban SDK pinned `=25.3.0` (CVE-2026-32322); `soroban-fixed-point-math =1.3.1` (no CVE — stability pin) | Cargo audit in CI; Dependabot alerts |
 | **Security** | Rate limiting against API abuse | Redis-backed per-wallet rate limiting (not per-IP) | Prometheus rate-limit counter metrics |
 | **Scalability** | Read layer scales with user growth | PostgreSQL read cache (ADR-002/ADR-003); stateless Go API scales horizontally | PostgreSQL connection pool metrics; API pod count |
 | **Durability** | Escrow state never lost | Soroban Persistent Storage + programmatic `extend_ttl` (ADR-003); TTL monitoring worker | TTL worker heartbeat; active escrow TTL dashboard in Grafana |
@@ -1105,6 +1105,11 @@ The system architecture changes materially across the Journey to Mastery phases.
 Browser → @creit.tech/stellar-wallets-kit → Stellar RPC → Soroban Contracts
 ```
 
+**Orange Belt (minimal signing service):**
+```
+Browser → Minimal Signing Service (fee-bump + SEP-10 only) + Stellar RPC → Soroban Contracts
+```
+
 **Green Belt+ (full stack):**
 ```
 Browser → Next.js → Go API → PostgreSQL (reads)
@@ -1159,17 +1164,33 @@ Soroban Events → Mercury/Zephyr VM → PostgreSQL
 
 ---
 
-### ADR-004: No Backend Until Green Belt
+### ADR-004: Minimal Signing Service at Orange Belt; Full Backend at Green Belt
 
-**Status:** Approved
+**Status:** Approved (revised from original "No Backend Until Green Belt")
 
-**Decision:** No backend server is introduced until Green Belt (Level 3–4). White and Yellow Belt phases operate with the frontend communicating directly with Soroban contracts via Stellar RPC.
+**Decision:** White and Yellow Belt phases operate with the frontend communicating directly with Soroban contracts via Stellar RPC — no backend server. At Orange Belt, a **minimal signing service** is introduced specifically to support fee-bump transaction sponsorship and SEP-10 challenge generation. The full Go REST API is introduced at Green Belt.
 
-**Context:** Every infrastructure component introduced during development expands the attack surface. During the White and Yellow Belt phases — when the contract logic is being hardened, the team is gaining Soroban proficiency, and external security audits have not yet occurred — introducing a backend server would add a layer of complexity and attack surface with no compensating benefit. The frontend can interact directly with Soroban contracts.
+**Context:** The original ADR-004 stated "no backend until Green Belt." However, two Orange Belt deliverables structurally require a server-held signing key:
 
-**Rationale:** Eliminating the backend in early phases reduces the attack surface to exactly two components: the user's browser and the Soroban contract. This is the smallest possible footprint during the most critical development phase. The backend is introduced at Green Belt precisely when its value (providing fast read access to indexed contract events) first outweighs its complexity cost.
+1. **Fee-bump transaction sponsorship** — the platform sponsors network fees on behalf of users. This requires a funded XLM account whose keypair co-signs transactions. A persistent, key-holding process is required.
+2. **SEP-10 authentication** — the [SEP-10 standard](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0010.md) requires a server holding a keypair to build and sign the challenge transaction, and to verify the signed response. There is no browser-only implementation of SEP-10's server role.
 
-**Trade-off:** No server-side computation or caching in early phases. Performance and query capability are limited to what Stellar RPC can provide directly. This is acceptable for testnet and early feedback cycles.
+Calling these "pre-API" does not change the fact that a server process holding a keypair exists. The attack surface must be documented and controlled, not obscured.
+
+**Decision Detail:** The Orange Belt signing service is a small, purpose-limited component:
+- It holds exactly two keypairs: the fee-bump sponsorship account and the SEP-10 server keypair
+- It exposes exactly two endpoints: SEP-10 challenge/verify and fee-bump co-signing
+- It has its own threat model (see `10_SECURITY.md` when written) — the sponsorship account holds XLM but never holds escrowed user funds
+- It is deployed as a separate process from the future Go API to keep the footprint minimal
+
+**Rationale:** Acknowledging the minimal signing service honestly is safer than having an undocumented server that sits outside all specified security controls. The non-custodial guarantee is unaffected — this service co-signs fee-bump envelopes and SEP-10 challenges only; it has no path to escrowed funds.
+
+**Trade-off:** Introduces a server process (and its attack surface) one belt earlier than the original plan. The service is intentionally narrow — no read queries, no business logic, two endpoints only. This scope boundary must be enforced.
+
+> **Phase summary:**
+> - **White/Yellow Belt:** Browser → Stellar RPC → Soroban Contracts (no server)
+> - **Orange Belt:** Browser → Minimal Signing Service (fee-bump + SEP-10 only) + Stellar RPC → Soroban Contracts
+> - **Green Belt+:** Browser → Go REST API (full modular monolith) → PostgreSQL / Redis / Stellar RPC → Soroban Contracts
 
 ---
 
@@ -1197,7 +1218,7 @@ Security is not a layer applied on top of this architecture — it is expressed 
 |---|---|---|
 | **Contract authorization** | Every state-altering function requires cryptographic proof of identity | `Address.require_auth()` on every mutating function |
 | **Admin access control** | Emergency operations require threshold approval | 3-of-5 multisig for pause and config changes |
-| **Dependency hardening** | Known CVEs patched | Soroban SDK `>=25.3.0` (CVE-2026-32322: arbitrary state write via malformed auth envelope); Fixed-point math `>=1.3.1` (CVE-2026-24783: precision loss in fee calculation allowing fee extraction) |
+| **Dependency hardening** | Known CVEs patched; active dependencies correctly identified | Soroban SDK `=25.3.0` (CVE-2026-32322: missing modular-reduction in Fr scalar-field equality comparisons for BN254/BLS12-381; see §24.3); `soroban-fixed-point-math =1.3.1` (Soroban-native fork; no verified CVE — pinned for auditable fee arithmetic) |
 | **Static analysis** | Automated contract vulnerability detection | Scout Audit runs on every CI pull request |
 | **External audit** | Pre-mainnet validation by recognized Rust/Soroban security firm | No mainnet deployment without at least one completed audit |
 | **Evidence integrity** | Tamper-proof dispute evidence | IPFS content-addressed storage via Pinata — evidence hash stored on-chain |
@@ -1216,10 +1237,11 @@ The core security property of Stellar Guardian is that the platform operator nev
 
 ### 24.3 CVE Baseline
 
-| CVE ID | Description | Mitigation |
-|---|---|---|
-| CVE-2026-32322 | Soroban SDK: arbitrary state write via malformed authorization envelope | Pin `soroban-sdk >= 25.3.0` |
-| CVE-2026-24783 | Fixed-point math library: precision loss in fee calculations enabling fee extraction | Pin `fixed-point-math >= 1.3.1` |
+| CVE ID | Description | Affected Versions | Mitigation | Relevance to This Project |
+|---|---|---|---|---|
+| CVE-2026-32322 | Soroban SDK: missing modular-reduction step in Fr scalar-field equality comparisons for BN254/BLS12-381 types. Contracts that compare user-supplied elliptic-curve scalar values without going through host-side arithmetic can receive incorrect equality results, enabling authorization or validation bypasses in contracts using pairing-based cryptography. | `soroban-sdk` < 25.3.0 (patched in 22.0.11, 23.5.3, 25.3.0) | Pin `soroban-sdk = 25.3.0` | **Directly relevant to nullifier construction in `ReputationLedger`.** BN254/BLS12-381 pairing curves are standard for nullifier/commitment schemes. Re-read this CVE before designing the reviewer identifier scheme in `08_SMART_CONTRACT_SPEC.md` (see §26 Risk 5). |
+
+> **Note on `soroban-fixed-point-math`:** The crate name `fixed-point-math` (as referenced in earlier versions of this document) is deprecated on crates.io at v0.0.2 and is not the correct dependency. The actively maintained Soroban-native library is `soroban-fixed-point-math`. Version `=1.3.1` is pinned for fee arithmetic stability and auditability. There is no verified CVE associated with this crate — a previously cited CVE-2026-24783 could not be verified in any public advisory database (GitHub Advisory Database, RustSec, NVD) and has been removed from this document.
 
 ### 24.4 Threat Model Summary
 
@@ -1383,6 +1405,6 @@ Soroban supports contract code upgrades via `upgrade` host function calls. Befor
 
 *Document classification: Internal — Engineering*
 *Previous document: [`01_PRODUCT_DISCOVERY.md`](./01_PRODUCT_DISCOVERY.md)*
-*Next document: [`03_ARCHITECTURE_REVIEW.md`](./03_ARCHITECTURE_REVIEW.md) (see documentation series order)*
+*Next document: [`03_ENGINEERING_BLUEPRINT.md`](./03_ENGINEERING_BLUEPRINT.md)*
 *Revision notes: v1.0 — Initial authored version. Derived from `01_PRODUCT_DISCOVERY.md` and project steering context. Covers White Belt through Black Belt target architecture.*
 *Revision notes: v1.1 — Added 15 new sections: Component Diagrams §4 (C4 Level 3), Domain Architecture §7 (DDD bounded contexts and aggregates), Event-Driven Architecture §8 (event catalog and flow), API Boundary Map §11, Sequence Diagrams §12 (5 flows: creation, funding, milestone release, auto-refund, SEP-24), Deployment Diagram §13, Network Boundaries & Trust Zones §14, Infrastructure Layer §15, Observability Architecture §16 (logs/metrics/traces), Contract Upgrade Architecture §17, Data Ownership Map §18, Non-Functional Requirements Mapping §19, Failure Scenarios §20 (Mercury/Redis/RPC/PostgreSQL), Architectural Principles §21 (10 principles). Fixed Container Diagram notation from C4Context to C4Container. Renumbered all sections (28 total). Added 14 new glossary terms.*
