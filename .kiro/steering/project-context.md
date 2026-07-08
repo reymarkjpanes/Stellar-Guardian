@@ -112,8 +112,8 @@ stellar-guardian/
 - Every state-altering contract function must call `Address.require_auth()`.
 - No admin key may directly drain active, non-disputed escrows.
 - All active escrow state uses Persistent Storage with programmatic TTL extension.
-- Soroban SDK pinned to `>=25.3.0` (CVE-2026-32322 fix).
-- Fixed-point math library pinned to `>=1.3.1` (CVE-2026-24783 fix).
+- Soroban SDK pinned to `=25.3.0` (CVE-2026-32322 fix — Fr scalar-field equality bug affecting BN254/BLS12-381 comparisons; directly relevant to any pairing-based nullifier scheme).
+- `soroban-fixed-point-math` pinned to `=1.3.1` (actively maintained Soroban-native fork; no verified CVE — pinned for stability and auditable fee arithmetic).
 - Scout Audit static analysis runs on every CI pull request.
 - Emergency pause via 3-of-5 multisig admin control.
 

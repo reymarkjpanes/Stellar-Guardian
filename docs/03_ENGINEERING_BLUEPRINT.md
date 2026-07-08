@@ -217,10 +217,10 @@ resolver = "2"
 
 [workspace.dependencies]
 soroban-sdk = { version = "=25.3.0", features = ["testutils"] }
-fixed-point-math = { version = "=1.3.1" }
+soroban-fixed-point-math = { version = "=1.3.1" }
 ```
 
-> **Pinning rationale:** Exact version pins (`=25.3.0`, `=1.3.1`) are used for production contracts per Recommendation §27.1 in `02_ARCHITECTURE_REVIEW.md`. CVE-2026-32322 (Soroban SDK) and CVE-2026-24783 (fixed-point math) require these minimum versions. Exact pins prevent unexpected behavior from patch releases.
+> **Pinning rationale:** Exact version pins (`=25.3.0`, `=1.3.1`) are used for production contracts per Recommendation §27.1 in `02_ARCHITECTURE_REVIEW.md`. CVE-2026-32322 (Soroban SDK — Fr scalar-field equality bug affecting BN254/BLS12-381 pairing-based cryptography, directly relevant to the nullifier scheme in `contracts/reputation/`) requires `soroban-sdk ≥ 25.3.0`. The crate `soroban-fixed-point-math` is the actively maintained Soroban-native fixed-point library — **not** `fixed-point-math`, which is deprecated on crates.io at v0.0.2. It is pinned at `=1.3.1` for auditable fee arithmetic; there is no verified CVE associated with it.
 
 ### 4.2 Contract File Structure
 
@@ -274,7 +274,7 @@ impl EscrowAgreement {
 1. `require_auth()` is called **first**, before any state read or write
 2. `extend_ttl()` is called on all touched Persistent Storage entries
 3. An event is emitted for every state transition
-4. Integer arithmetic uses the `fixed-point-math` library for fee calculations — no floating point
+4. Integer arithmetic uses the `soroban-fixed-point-math` library for fee calculations — no floating point
 
 ### 4.4 Storage Key Conventions
 
@@ -1195,7 +1195,7 @@ Every PR must:
 
 - Lock file: `contracts/Cargo.lock` is committed (binary crates commit lock files)
 - Adding dependencies: Add to `[workspace.dependencies]` in `contracts/Cargo.toml` first
-- Version pinning: Exact pins (`=x.y.z`) for `soroban-sdk` and `fixed-point-math` — see §4.1
+- Version pinning: Exact pins (`=x.y.z`) for `soroban-sdk` and `soroban-fixed-point-math` — see §4.1
 - Audit: `cargo audit` runs in CI
 
 ### 16.3 Go (API)
@@ -1215,7 +1215,7 @@ Each Journey to Mastery phase has a concrete implementation scope. Engineers mus
 |---|---|---|
 | **White Belt** | `contracts/escrow/` — `initialize_escrow`, `fund_escrow`, `approve_milestone`, `claim_after_expiry`; local Docker; basic Next.js page | `cargo test` passes; local fund + release cycle works end-to-end |
 | **Yellow Belt** | Multi-milestone escrow on Testnet; wallet kit integration in web app; `open_dispute` stub | All escrow state transitions work on Testnet via wallet signing |
-| **Orange Belt** | 2-of-3 multisig escrow support; `check-auth` custom authorization; fee-bump sponsorship | Multisig escrow created and released via 2 different wallets |
+| **Orange Belt** | 2-of-3 multisig escrow support; `check-auth` custom authorization; fee-bump sponsorship (minimal signing service introduced — see ADR-004) | Multisig escrow created and released via 2 different wallets; fee-bump sponsorship confirmed |
 | **Green Belt** | Go REST API; PostgreSQL + Redis; Mercury Zephyr indexer; `contracts/dispute/`; TTL worker | Full read layer operational; dispute flow works on Testnet |
 | **Blue Belt** | SEP-24/SEP-38 anchor integration; `contracts/reputation/`; IPFS evidence upload | End-to-end fiat-to-escrow flow works with a live SEP-24 anchor |
 | **Black Belt** | `contracts/marketplace/`; decentralized juror pool; Mainnet deployment; external audit complete | No critical audit findings; $0 active escrow value on Testnet migrated to Mainnet procedures |
@@ -1246,5 +1246,5 @@ Each Journey to Mastery phase has a concrete implementation scope. Engineers mus
 
 *Document classification: Internal — Engineering*
 *Previous document: [`02_ARCHITECTURE_REVIEW.md`](./02_ARCHITECTURE_REVIEW.md)*
-*Next document: [`04_DOMAIN_MODEL.md`](./04_DOMAIN_MODEL.md) (see documentation series order)*
+*Next document: [`04_PRODUCT_PLAN.md`](./04_PRODUCT_PLAN.md)*
 *Revision notes: v1.0 — Initial authored version. Covers White Belt through Black Belt implementation standards. References `02_ARCHITECTURE_REVIEW.md` for all architectural decisions. Implementation details for contract interfaces deferred to `08_SMART_CONTRACT_SPEC.md`; database schema to `06_DATABASE_DESIGN.md`; API endpoint contracts to `07_API_SPECIFICATION.md`.*
