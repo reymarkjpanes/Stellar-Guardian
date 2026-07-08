@@ -50,7 +50,7 @@ The document covers the system's major structural components, their responsibili
 
 **Scope boundaries:**
 - This document covers system architecture, not implementation detail. For detailed contract interfaces and state machines, see `08_SMART_CONTRACT_SPEC.md`. For database schema, see `06_DATABASE_DESIGN.md`.
-- The architecture described here covers the full Black Belt target state unless otherwise noted. Phase-specific constraints are called out explicitly in [Section 8](#8-phase-gated-architecture-evolution).
+- The architecture described here covers the full Black Belt target state unless otherwise noted. Phase-specific constraints are called out explicitly in [Section 22](#22-phase-gated-architecture-evolution).
 
 ---
 
@@ -227,7 +227,7 @@ flowchart TD
     B -->|claim_after timestamp reached, no action| G[Expired — Auto-Refund]
     C -->|subsequent milestones disputed| E
 ```
-*Figure 3 — EscrowAgreement state machine. Every path is deterministic and timelock-guaranteed.*
+*Figure 5 — EscrowAgreement state machine. Every path is deterministic and timelock-guaranteed.*
 
 **Key state properties:**
 - `claim_after`: UNIX timestamp. When reached with no counterparty action, the contract routes funds to the default beneficiary (payer). No permanent fund trapping is possible.
@@ -274,7 +274,7 @@ sequenceDiagram
     RL-->>EA: Ok
     EA-->>C: Ok
 ```
-*Figure 21 — Cross-contract call sequence for dispute initiation and resolution.*
+*Figure 6 — Cross-contract call sequence for dispute initiation and resolution.*
 
 ### 5.5 Fee Collection Architecture
 
@@ -363,7 +363,7 @@ flowchart TD
     ui --> types
     ui --> shared
 ```
-*Figure 22 — Internal package dependency graph. No circular dependencies permitted.*
+*Figure 7 — Internal package dependency graph. No circular dependencies permitted.*
 
 ---
 
@@ -408,7 +408,7 @@ flowchart TD
     DisputeDomain -->|"record_outcome()"| ReputationDomain
     MarketplaceDomain -->|"initialize_escrow()"| EscrowDomain
 ```
-*Figure 6 — Four bounded contexts and their cross-domain call directions.*
+*Figure 8 — Four bounded contexts and their cross-domain call directions.*
 
 ### 7.2 Escrow Domain Aggregates
 
@@ -484,7 +484,7 @@ flowchart LR
     API -->|JSON| WEB[Web Application]
     API -->|SSE stream| WEB
 ```
-*Figure 7 — Event-driven read model. Contracts write events on-chain; Mercury normalizes them into PostgreSQL; the API serves read queries.*
+*Figure 9 — Event-driven read model. Contracts write events on-chain; Mercury normalizes them into PostgreSQL; the API serves read queries.*
 
 ### 8.3 Event Ordering Guarantees
 
@@ -531,7 +531,7 @@ flowchart LR
     PG -->|Read queries| API[Go REST API]
     API -->|JSON response| WEB[Web Application]
 ```
-*Figure 19 — Event indexing pipeline (data layer view). See Section 8 for the full event-driven architecture.*
+*Figure 10 — Event indexing pipeline (data layer view). See Section 8 for the full event-driven architecture.*
 
 **Fallback behavior:** If Mercury is unavailable, the Go API falls back to direct Stellar RPC polling at a reduced query frequency. The fallback path is read-only — no fund-safety function depends on Mercury availability.
 
@@ -567,7 +567,7 @@ sequenceDiagram
     A-->>W: JWT (short-lived, scoped to account)
     W->>W: Store JWT in memory (not localStorage)
 ```
-*Figure 20 — SEP-10 authentication flow. No passwords. No private key exposure.*
+*Figure 11 — SEP-10 authentication flow. No passwords. No private key exposure.*
 
 **JWT scope:** JWTs are scoped to a single Stellar account address. Cross-account actions (such as an arbiter acting on a dispute) require a separate challenge/response cycle for the arbiter's account.
 
@@ -640,7 +640,7 @@ sequenceDiagram
     RPC-->>W: Transaction result + escrow_id
     W-->>U: Escrow created — awaiting funding
 ```
-*Figure 8 — Escrow creation flow. No funds move at creation — funding is a separate step.*
+*Figure 12 — Escrow creation flow. No funds move at creation — funding is a separate step.*
 
 ### 12.2 Escrow Funding
 
@@ -664,7 +664,7 @@ sequenceDiagram
     RPC-->>W: Transaction result
     W-->>U: Escrow active — funds locked
 ```
-*Figure 9 — Escrow funding flow. State transitions to Active only after USDC is confirmed locked.*
+*Figure 13 — Escrow funding flow. State transitions to Active only after USDC is confirmed locked.*
 
 ### 12.3 Milestone Release
 
@@ -692,7 +692,7 @@ sequenceDiagram
     EA-->>RPC: Ok — MilestoneReleased event emitted
     RPC-->>W: Transaction result
 ```
-*Figure 10 — Milestone release flow with proportional fee deduction.*
+*Figure 14 — Milestone release flow with proportional fee deduction.*
 
 ### 12.4 Timelock Auto-Refund
 
@@ -717,7 +717,7 @@ sequenceDiagram
     RPC-->>W: Transaction result
     W-->>S: Funds received
 ```
-*Figure 11 — Timelock auto-refund. Payee claims unreleased funds after the claim_after window expires.*
+*Figure 15 — Timelock auto-refund. Payee claims unreleased funds after the claim_after window expires.*
 
 ### 12.5 SEP-24 Fiat Deposit (Blue Belt+)
 
@@ -744,7 +744,7 @@ sequenceDiagram
     W->>RPC: Submit fund_escrow() with USDC
     RPC-->>W: Escrow funded
 ```
-*Figure 12 — SEP-24 fiat-to-stablecoin deposit integrated with escrow funding.*
+*Figure 16 — SEP-24 fiat-to-stablecoin deposit integrated with escrow funding.*
 
 ---
 
@@ -778,7 +778,7 @@ Mercury + Zephyr VM (Separate process — Green Belt+)
     ▼
 PostgreSQL (Writes normalized event rows)
 ```
-*Figure 13 — Production deployment topology. Write operations flow through Stellar RPC directly; read operations flow through the Go API and PostgreSQL.*
+*Figure 17 — Production deployment topology. Write operations flow through Stellar RPC directly; read operations flow through the Go API and PostgreSQL.*
 
 **Admin Panel (`apps/admin/`)** is deployed behind the same NGINX reverse proxy but on a restricted path. Admin operations require 3-of-5 multisig authorization — the admin panel is a convenience interface, not an elevated-privilege server process.
 
@@ -824,7 +824,7 @@ Understanding trust zones is a prerequisite for the threat model in `10_SECURITY
 │    audited Rust/WASM)   no single point of failure)     │
 └─────────────────────────────────────────────────────────┘
 ```
-*Figure 14 — Trust zone boundaries. Fund-safety logic exists exclusively in the Trusted zone.*
+*Figure 18 — Trust zone boundaries. Fund-safety logic exists exclusively in the Trusted zone.*
 
 ### 14.2 Trust Zone Properties
 
@@ -896,7 +896,7 @@ flowchart LR
     Mercury[Mercury Indexer] -->|Event processing logs| Loki
     Loki -->|Query| Grafana[Grafana Dashboards]
 ```
-*Figure 15 — Log aggregation pipeline.*
+*Figure 19 — Log aggregation pipeline.*
 
 All application logs are structured JSON. Log levels: `ERROR` for actionable failures, `WARN` for degraded states, `INFO` for normal operations, `DEBUG` for development only (disabled in production).
 
@@ -911,7 +911,7 @@ flowchart LR
     Prometheus -->|Query| Grafana[Grafana Dashboards]
     Prometheus -->|Alert rules| AlertManager[AlertManager]
 ```
-*Figure 16 — Metrics pipeline. Business KPIs and infrastructure health in a single Grafana instance.*
+*Figure 20 — Metrics pipeline. Business KPIs and infrastructure health in a single Grafana instance.*
 
 Key metrics exposed by the Go API: active escrow count, escrow volume (USDC), dispute rate, TTL worker status, RPC latency (p50/p95/p99), Mercury indexer lag, API error rate.
 
@@ -924,7 +924,7 @@ flowchart LR
     Collector -->|OTLP export| Jaeger[Jaeger]
     Jaeger -->|Trace UI| Engineers[Engineering Team]
 ```
-*Figure 17 — Distributed tracing pipeline. Traces span from API request through RPC call to on-chain confirmation.*
+*Figure 21 — Distributed tracing pipeline. Traces span from API request through RPC call to on-chain confirmation.*
 
 Tracing is most valuable for diagnosing latency in the RPC → Soroban call path and in the Mercury → PostgreSQL indexing lag. Trace context propagates from the API handler through the repository layer to the Stellar RPC client.
 
@@ -945,7 +945,7 @@ flowchart TD
     E --> F[Post-Upgrade Verification\nAutomated tests run against upgraded contract on testnet fork\nArbiter verifies no state corruption]
     F --> G[Resume Contract\n3-of-5 admin multisig lifts pause\nNormal operations resume]
 ```
-*Figure 18 — Contract upgrade governance flow. No single operator can initiate, approve, and execute an upgrade.*
+*Figure 22 — Contract upgrade governance flow. No single operator can initiate, approve, and execute an upgrade.*
 
 ### 17.2 Upgrade Invariants
 
@@ -957,7 +957,7 @@ flowchart TD
 | Minimum review window | 48-hour timelock between approval and execution; cannot be waived |
 | No single-operator upgrade | 3-of-5 multisig required at pause, approval, and resume steps |
 
-> **Contract Registry (from Recommendation 13.3):** Upgrading a contract changes its deployed address in some upgrade patterns. A `ContractRegistry` contract in Instance Storage maps contract roles (e.g., `"dispute"` → `<contract_id>`) to their current addresses. Cross-contract callers resolve addresses via the registry, not hardcoded values. This is the recommended path before the first Mainnet upgrade.
+> **Contract Registry (from Recommendation 27.3):** Upgrading a contract changes its deployed address in some upgrade patterns. A `ContractRegistry` contract in Instance Storage maps contract roles (e.g., `"dispute"` → `<contract_id>`) to their current addresses. Cross-contract callers resolve addresses via the registry, not hardcoded values. This is the recommended path before the first Mainnet upgrade.
 
 ---
 
@@ -1365,10 +1365,24 @@ Soroban supports contract code upgrades via `upgrade` host function calls. Befor
 | **USDC** | USD Coin — a regulated, fully-reserved US dollar stablecoin issued by Circle. Primary settlement currency. |
 | **EURC** | Euro Coin — Circle's EUR-denominated stablecoin. Secondary settlement currency. |
 | **WASM** | WebAssembly — the binary instruction format to which Rust smart contracts are compiled for execution in the Soroban runtime. |
+| **DDD** | Domain-Driven Design — a software design approach that models software around business domains and their bounded contexts. |
+| **Bounded Context** | A DDD concept defining the explicit boundary within which a domain model applies. Each Soroban contract in Stellar Guardian is a bounded context. |
+| **OpenTelemetry** | A vendor-neutral observability framework providing APIs and SDKs for distributed tracing, metrics, and logs. Used for tracing the Go API and Mercury indexer. |
+| **Jaeger** | An open-source distributed tracing backend. Receives trace data from the OpenTelemetry Collector for visualization and analysis. |
+| **Loki** | A horizontally scalable log aggregation system by Grafana Labs. Receives structured JSON logs from all Stellar Guardian containers. |
+| **Sentry** | An error tracking and performance monitoring platform. Used for real-time error alerting in the Next.js web app and Go API. |
+| **Prometheus** | An open-source metrics collection and alerting system. Scrapes the Go API `/metrics` endpoint and system exporters. |
+| **Grafana** | An open-source observability and dashboarding platform. Visualizes Prometheus metrics and Loki log data. |
+| **Scout Audit** | A static analysis tool for Soroban smart contracts. Runs on every CI pull request as a non-negotiable security gate. |
+| **Contract Registry** | A lightweight Soroban contract in Instance Storage that maps contract role names to deployed contract addresses. Enables upgrades without hardcoded cross-contract addresses. |
+| **OTel Collector** | The OpenTelemetry Collector — a vendor-agnostic pipeline component that receives, processes, and exports telemetry data. |
+| **Nullifier** | A cryptographic value that proves a computation was performed without revealing the inputs. Used in the ReputationLedger to prevent double-submission of reviews. |
+| **Juror Pool** | The Black Belt decentralized dispute resolution system. Jurors stake tokens to participate; game-theoretic incentives make honest rulings the dominant strategy. |
 
 ---
 
 *Document classification: Internal — Engineering*
 *Previous document: [`01_PRODUCT_DISCOVERY.md`](./01_PRODUCT_DISCOVERY.md)*
-*Next document: `02_REQUIREMENTS_SRS.md` (see documentation series order)*
+*Next document: [`03_ARCHITECTURE_REVIEW.md`](./03_ARCHITECTURE_REVIEW.md) (see documentation series order)*
 *Revision notes: v1.0 — Initial authored version. Derived from `01_PRODUCT_DISCOVERY.md` and project steering context. Covers White Belt through Black Belt target architecture.*
+*Revision notes: v1.1 — Added 15 new sections: Component Diagrams §4 (C4 Level 3), Domain Architecture §7 (DDD bounded contexts and aggregates), Event-Driven Architecture §8 (event catalog and flow), API Boundary Map §11, Sequence Diagrams §12 (5 flows: creation, funding, milestone release, auto-refund, SEP-24), Deployment Diagram §13, Network Boundaries & Trust Zones §14, Infrastructure Layer §15, Observability Architecture §16 (logs/metrics/traces), Contract Upgrade Architecture §17, Data Ownership Map §18, Non-Functional Requirements Mapping §19, Failure Scenarios §20 (Mercury/Redis/RPC/PostgreSQL), Architectural Principles §21 (10 principles). Fixed Container Diagram notation from C4Context to C4Container. Renumbered all sections (28 total). Added 14 new glossary terms.*
